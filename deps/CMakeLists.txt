@@ -1,12 +1,12 @@
 #
-# This CMake project downloads, configures and builds PrusaSlicer dependencies on Unix and Windows.
+# This CMake project downloads, configures and builds OrcaSlicer dependencies on Unix and Windows.
 #
 # When using this script, it's recommended to perform an out-of-source build using CMake.
 #
 # All the dependencies are installed in a `destdir` directory in the root of the build directory,
 # in a traditional Unix-style prefix structure. The destdir can be used directly by CMake
-# when building PrusaSlicer - to do this, set the CMAKE_PREFIX_PATH to ${destdir}/usr/local.
-# Warning: On UNIX/Linux, you also need to set -DSLIC3R_STATIC=1 when building PrusaSlicer.
+# when building OrcaSlicer - to do this, set the CMAKE_PREFIX_PATH to ${destdir}/usr/local.
+# Warning: On UNIX/Linux, you also need to set -DSLIC3R_STATIC=1 when building OrcaSlicer.
 #
 # For better clarity of console output, it's recommended to _not_ use a parallelized build
 # for the top-level command, ie. use `make -j 1` or `ninja -j 1` to force single-threaded top-level
@@ -20,8 +20,17 @@
 # therefore, unfortunatelly, the installation cannot be copied/moved elsewhere without re-installing wxWidgets.
 #
 
-project(PrusaSlicer-deps)
 cmake_minimum_required(VERSION 3.2)
+if (APPLE)
+    # if CMAKE_OSX_DEPLOYMENT_TARGET is not set, set it to 11.3
+    if (NOT CMAKE_OSX_DEPLOYMENT_TARGET)
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "11.3" CACHE STRING "Minimum OS X deployment version" FORCE)
+    endif ()
+    message(STATUS "CMAKE_OSX_DEPLOYMENT_TARGET: ${CMAKE_OSX_DEPLOYMENT_TARGET}")
+
+endif ()
+
+project(OrcaSlicer-deps)
 
 include(ExternalProject)
 include(ProcessorCount)
@@ -32,13 +41,41 @@ if (NPROC EQUAL 0)
 endif ()
 
 set(DESTDIR "${CMAKE_CURRENT_BINARY_DIR}/destdir" CACHE PATH "Destination directory")
-set(DEP_DOWNLOAD_DIR ${CMAKE_CURRENT_BINARY_DIR} CACHE PATH "Path for downloaded source packages.")
+set(DEP_DOWNLOAD_DIR ${CMAKE_CURRENT_BINARY_DIR}/../DL_CACHE CACHE PATH "Path for downloaded source packages.")
 
-option(DEP_DEBUG "Build debug variants (only applicable on Windows)" ON)
+get_property(_is_multi GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+
+if (_is_multi)
+    option(DEP_DEBUG "Build debug variants (only applicable on Windows)" OFF)
+    option(ORCA_INCLUDE_DEBUG_INFO "Includes debug information in a release build (like RelWithDebInfo) in a way that works with multi-configuration generators and incompatible dependencies. DEP_DEBUG option takes priority over this." OFF)
+endif ()
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     option(DEP_WX_GTK3 "Build wxWidgets against GTK3" OFF)
+else() 
+    if(POLICY CMP0135) # DOWNLOAD_EXTRACT_TIMESTAMP
+        cmake_policy(SET CMP0135 NEW)
+    endif()
 endif()
+
+set(IS_CROSS_COMPILE FALSE)
+
+if (APPLE)
+    set(CMAKE_FIND_FRAMEWORK LAST)
+    set(CMAKE_FIND_APPBUNDLE LAST)
+    list(FIND CMAKE_OSX_ARCHITECTURES ${CMAKE_SYSTEM_PROCESSOR} _arch_idx)
+    message(STATUS "prusaslicer_add_cmake_project for Apple")
+    if (CMAKE_OSX_ARCHITECTURES AND _arch_idx LESS 0)
+        message(STATUS "prusaslicer_add_cmake_project for Apple crosscompiling")
+        set(IS_CROSS_COMPILE TRUE)
+        set(CMAKE_CXX_COMPILER_ID "Clang")
+        string(REPLACE ";" "$<SEMICOLON>" CMAKE_OSX_ARCHS "${CMAKE_OSX_ARCHITECTURES}")
+        set(_cmake_osx_arch -DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_OSX_ARCHS})
+        set(_cmake_args_osx_arch CMAKE_ARGS -DCMAKE_OSX_ARCHITECTURES:STRING=${CMAKE_OSX_ARCHS})
+        message(STATUS "Detect Cross-compilation. Will build for target ${CMAKE_OSX_ARCHS}" )
+    endif ()
+endif ()
+
 
 # On developer machines, it can be enabled to speed up compilation and suppress warnings coming from IGL. 
 # FIXME:
@@ -46,28 +83,30 @@ endif()
 # Slic3r compiles with a different version which will cause runtime errors.
 # option(DEP_BUILD_IGL_STATIC "Build IGL as a static library. Might cause link errors and increase binary size." OFF)
 
-message(STATUS "PrusaSlicer deps DESTDIR: ${DESTDIR}")
-message(STATUS "PrusaSlicer dowload dir for source packages: ${DEP_DOWNLOAD_DIR}")
-message(STATUS "PrusaSlicer deps debug build: ${DEP_DEBUG}")
+message(STATUS "OrcaSlicer deps DESTDIR: ${DESTDIR}")
+message(STATUS "OrcaSlicer dowload dir for source packages: ${DEP_DOWNLOAD_DIR}")
+message(STATUS "OrcaSlicer deps debug build: ${DEP_DEBUG}")
 
 find_package(Git REQUIRED)
 
 # The default command line for patching. Only works for newer 
 set(PATCH_CMD ${GIT_EXECUTABLE} apply --verbose --ignore-space-change --whitespace=fix)
 
-get_property(_is_multi GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
-
 if (NOT _is_multi AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release)
     message(STATUS "Forcing CMAKE_BUILD_TYPE to Release as it was not specified.")
 endif ()
 
-function(prusaslicer_add_cmake_project projectname)
+function(orcaslicer_add_cmake_project projectname)
     cmake_parse_arguments(P_ARGS "" "INSTALL_DIR;BUILD_COMMAND;INSTALL_COMMAND" "CMAKE_ARGS" ${ARGN})
 
     set(_configs_line -DCMAKE_BUILD_TYPE:STRING=${CMAKE_BUILD_TYPE})
     if (_is_multi OR MSVC)
-        set(_configs_line "")
+        if (ORCA_INCLUDE_DEBUG_INFO AND NOT DEP_DEBUG)
+            set(_configs_line "-DCMAKE_C_FLAGS_RELEASE:STRING=${CMAKE_C_FLAGS_RELWITHDEBINFO} -DCMAKE_CXX_FLAGS_RELEASE:STRING=${CMAKE_CXX_FLAGS_RELWITHDEBINFO}")
+        else ()
+            set(_configs_line "")
+        endif ()
     endif ()
 
     set(_gen "")
@@ -75,11 +114,9 @@ function(prusaslicer_add_cmake_project projectname)
     if (MSVC)
         set(_gen CMAKE_GENERATOR "${DEP_MSVC_GEN}" CMAKE_GENERATOR_PLATFORM "${DEP_PLATFORM}")
         set(_build_j "/m")
-        if (${projectname} STREQUAL "OCCT")
-            set(_build_j "/m:1")
-        endif ()
     endif ()
 
+if (NOT IS_CROSS_COMPILE OR NOT APPLE)
     ExternalProject_Add(
         dep_${projectname}
         EXCLUDE_FROM_ALL    ON
@@ -95,6 +132,26 @@ function(prusaslicer_add_cmake_project projectname)
             -DCMAKE_CXX_COMPILER:STRING=${CMAKE_CXX_COMPILER}
             -DCMAKE_TOOLCHAIN_FILE:STRING=${CMAKE_TOOLCHAIN_FILE}
             -DBUILD_SHARED_LIBS:BOOL=OFF
+            ${_cmake_osx_arch}
+            "${_configs_line}"
+            ${DEP_CMAKE_OPTS}
+            ${P_ARGS_CMAKE_ARGS}
+       ${P_ARGS_UNPARSED_ARGUMENTS}
+       BUILD_COMMAND ${CMAKE_COMMAND} --build . --config Release -- ${_build_j}
+       INSTALL_COMMAND ${CMAKE_COMMAND} --build . --target install --config Release
+    )
+else()
+    ExternalProject_Add(
+        dep_${projectname}
+        EXCLUDE_FROM_ALL    ON
+        INSTALL_DIR         ${DESTDIR}/usr/local
+        DOWNLOAD_DIR        ${DEP_DOWNLOAD_DIR}/${projectname}
+        ${_gen}
+        CMAKE_ARGS
+            -DCMAKE_INSTALL_PREFIX:STRING=${DESTDIR}/usr/local
+            -DCMAKE_PREFIX_PATH:STRING=${DESTDIR}/usr/local
+            -DBUILD_SHARED_LIBS:BOOL=OFF
+            ${_cmake_osx_arch}
             "${_configs_line}"
             ${DEP_CMAKE_OPTS}
             ${P_ARGS_CMAKE_ARGS}
@@ -103,7 +160,9 @@ function(prusaslicer_add_cmake_project projectname)
        INSTALL_COMMAND ${CMAKE_COMMAND} --build . --target install --config Release
     )
 
-endfunction(prusaslicer_add_cmake_project)
+endif()
+
+endfunction(orcaslicer_add_cmake_project)
 
 
 if (MSVC)
@@ -167,6 +226,7 @@ include(Boost/Boost.cmake)
 include(Cereal/Cereal.cmake)
 include(Qhull/Qhull.cmake)
 include(GLEW/GLEW.cmake)
+include(GLFW/GLFW.cmake)
 include(OpenCSG/OpenCSG.cmake)
 
 include(TBB/TBB.cmake)
@@ -184,16 +244,16 @@ include(NLopt/NLopt.cmake)
 include(OpenSSL/OpenSSL.cmake)
 
 set(CURL_PKG "")
-if (NOT CURL_FOUND) 
+if (NOT CURL_FOUND)
     include(CURL/CURL.cmake)
     set(CURL_PKG dep_CURL)
 endif ()
 
 include(JPEG/JPEG.cmake)
 include(TIFF/TIFF.cmake)
-include(NanoSVG/NanoSVG.cmake)
 include(wxWidgets/wxWidgets.cmake)
 include(OCCT/OCCT.cmake)
+include(FREETYPE/FREETYPE.cmake)
 
 set(_dep_list
     dep_Boost
@@ -205,17 +265,24 @@ set(_dep_list
     dep_OpenVDB
     dep_OpenCSG
     dep_CGAL
-    dep_Qhull
-    dep_OCCT
+    dep_OpenSSL
+    dep_GLFW
     ${PNG_PKG}
     ${ZLIB_PKG}
     ${EXPAT_PKG}
     )
 
-# if (NOT MSVC)
+if (MSVC)
+    # Experimental
+    #list(APPEND _dep_list "dep_qhull")
+else()
+    list(APPEND _dep_list "dep_Qhull")
     # Not working, static build has different Eigen
     #list(APPEND _dep_list "dep_libigl")
-# endif()
+endif()
+
+list(APPEND _dep_list "dep_OCCT")
+list(APPEND _dep_list "dep_FREETYPE")
 
 add_custom_target(deps ALL DEPENDS ${_dep_list})
 

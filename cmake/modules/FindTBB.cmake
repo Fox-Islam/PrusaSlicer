@@ -1,8 +1,4 @@
-# This is a wrapper of FindTBB which prefers the config scripts if available in the system
-# but only if building with dynamic dependencies. The config scripts potentially belong
-# to TBB >= 2020 which is incompatible with OpenVDB in our static dependency bundle.
-# This workaround is useful for package maintainers on Linux systems to use newer versions
-# of intel TBB (renamed to oneTBB from version 2021 up).
+# ported from PrusaSlicer
 set(_q "")
 if(${CMAKE_FIND_PACKAGE_NAME}_FIND_QUIETLY)
     set(_q QUIET)

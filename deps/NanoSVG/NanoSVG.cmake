@@ -3,7 +3,8 @@
 # for rasterizing svg files from their original size to a squared power of two texture on Windows systems using
 # AMD Radeon graphics cards
 
-prusaslicer_add_cmake_project(NanoSVG
-    URL https://github.com/fltk/nanosvg/archive/abcd277ea45e9098bed752cf9c6875b533c0892f.zip
-    URL_HASH SHA256=e859938fbaee4b351bd8a8b3d3c7a75b40c36885ce00b73faa1ce0b98aa0ad34
+orcaslicer_add_cmake_project(NanoSVG
+    DEPENDS dep_Boost
+    URL https://github.com/SoftFever/nanosvg/archive/863f6aa97ef62028126fa2c19bd4350394c2e15e.zip
+        URL_HASH SHA256=8d9c1624ad6518dd6dfa31e4f8dc7da9ec243d88bae595c7a037450617fec851
 )
