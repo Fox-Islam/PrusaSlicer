@@ -25,6 +25,8 @@ jobs:
     name: Build Deps
     if: inputs.build-deps-only || inputs.valid-cache != true
     runs-on: ${{ inputs.os }}
+    env:
+      date: ""
     steps:
       # Setup the environment
       - name: Checkout

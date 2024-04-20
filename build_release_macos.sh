@@ -96,7 +96,7 @@ cp -R $resources_path ./PrusaSlicer.app/Contents/Resources
 # delete .DS_Store file
 find ./PrusaSlicer.app/ -name '.DS_Store' -delete
 # extract version
-# export ver=$(grep '^#define SoftFever_VERSION' ../src/libslic3r/libslic3r_version.h | cut -d ' ' -f3)
+# export ver=$(grep '^#define Project_VERSION' ../src/libslic3r/libslic3r_version.h | cut -d ' ' -f3)
 # ver="_V${ver//\"}"
 # echo $PWD
 # if [ "1." != "$NIGHTLY_BUILD". ];
