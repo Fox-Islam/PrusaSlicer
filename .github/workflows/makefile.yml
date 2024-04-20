@@ -2,27 +2,26 @@ name: Makefile CI
 
 on:
   push:
-    branches: [ "nonplanar" ]
+    branches: ["nonplanar"]
   pull_request:
-    branches: [ "nonplanar" ]
-  paths:
-     - 'deps/**'
-     - 'src/**'
-     - '**/CMakeLists.txt'
-     - 'version.inc'
-     - ".github/workflows/build_*.yml"
+    branches: ["nonplanar"]
+    paths:
+      - "deps/**"
+      - "src/**"
+      - "**/CMakeLists.txt"
+      - "version.inc"
+      - ".github/workflows/build_*.yml"
 
   workflow_dispatch: # allows for manual dispatch
     inputs:
       build-deps-only:
-        description: 'Only build dependencies (bypasses caching)'
+        description: "Only build dependencies (bypasses caching)"
         type: boolean
         default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-  
 
 jobs:
   build_all:

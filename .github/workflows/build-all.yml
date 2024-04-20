@@ -2,7 +2,9 @@ name: Build all
 
 on:
   push:
-    branches: ["nonplanar"]
+    branches:
+      - nonplanar
+      - task/*
   pull_request:
     branches:
       - nonplanar
@@ -17,7 +19,6 @@ on:
       - "localization/**"
       - "resources/**"
       - ".github/workflows/build_*.yml"
-
   workflow_dispatch: # allows for manual dispatch
     inputs:
       build-deps-only:
